@@ -1,5 +1,5 @@
 #!/bin/bash
-# $Id$
+# $Id: 2ee648bd6c2852931af589161655e0510b2b8d6e $
 
 CPIO_ARGS="--quiet -o -H newc"
 
@@ -219,6 +219,24 @@ append_blkid(){
     rm -rf "${TEMP}/initramfs-blkid-temp" > /dev/null
 }
 
+append_rng(){
+    if [ -d "${TEMP}/initramfs-rng-temp" ]
+    then
+        rm -r "${TEMP}/initramfs-rng-temp/"
+    fi
+    cd ${TEMP}
+    mkdir -p "${TEMP}/initramfs-rng-temp/"
+
+    copy_binaries "${TEMP}"/initramfs-rng-temp /usr/sbin/rngd
+
+    cd "${TEMP}/initramfs-rng-temp/"
+    log_future_cpio_content
+    find . -print | cpio ${CPIO_ARGS} --append -F "${CPIO}" \
+            || gen_die "compressing Random Number Generator cpio"
+    cd "${TEMP}"
+    rm -rf "${TEMP}/initramfs-blkid-temp" > /dev/null
+}
+
 append_multipath(){
     if [ -d "${TEMP}/initramfs-multipath-temp" ]
     then
@@ -409,6 +427,46 @@ append_zfs(){
             || gen_die "compressing zfs cpio"
     cd "${TEMP}"
     rm -rf "${TEMP}/initramfs-zfs-temp" > /dev/null
+}
+
+append_tpm2(){
+    if [ -d "${TEMP}/initramfs-tpm2-temp" ]
+    then
+        rm -r "${TEMP}/initramfs-tpm2-temp"
+    fi
+    mkdir -p "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+
+    # Copy binaries
+    copy_binaries "${TEMP}/initramfs-tpm2-temp" \
+       /usr/bin/tpm2_nvread   \
+       /usr/bin/tpm2_nvreadlock   \
+       /usr/bin/tpm2_policypassword   \
+       /usr/bin/tpm2_policypcr   \
+       /usr/bin/tpm2_startauthsession \
+       /usr/bin/tr
+    cp -a "/usr/lib64/libtss2-tcti-device.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"  
+    cp -a "/usr/lib64/libtss2-tcti-device.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"  
+    cp -a "/usr/lib64/libtss2-tcti-default.so" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-esys.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-esys.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-mu.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-mu.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-tctildr.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-tctildr.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-rc.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-rc.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-sys.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-sys.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-tcti-mssim.so.0.0.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libtss2-tcti-mssim.so.0" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+    cp -a "/usr/lib64/libcrypto.so.1.1" "${TEMP}/initramfs-tpm2-temp/usr/lib64"
+
+    cd "${TEMP}/initramfs-tpm2-temp/"
+    log_future_cpio_content
+    find . -print | cpio ${CPIO_ARGS} --append -F "${CPIO}" \
+            || gen_die "compressing tpm2 cpio"
+    cd "${TEMP}"
+    rm -rf "${TEMP}/initramfs-tpm2-temp" > /dev/null
 }
 
 append_btrfs() {
@@ -1053,9 +1111,13 @@ create_initramfs() {
 
     append_data 'zfs' "${ZFS}"
 
+    append_data 'tpm2' "${TPM2}"
+
     append_data 'btrfs' "${BTRFS}"
 
     append_data 'blkid'
+
+    append_data 'rng'
 
     append_data 'splash' "${SPLASH}"
 
