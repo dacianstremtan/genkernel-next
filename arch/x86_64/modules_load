@@ -37,3 +37,5 @@ MODULES_VIRTIO="virtio virtio_balloon virtio_console virtio_net virtio_blk virti
 
 # Microsoft Hyper-V support
 MODULES_HYPERV="hv_storvsc hv_netvsc hyperv_fb"
+
+MODULES_TPM="pm_atmel tpm_crb tpm_i2c_atmel tpm_i2c_infineon tpm_i2c_nuvoton tpm_infineon tpm_nsc tpm_tis_core tpm_tis tpm_vtpm_proxy tpm_st33zp24_i2c tpm_st33zp24"
