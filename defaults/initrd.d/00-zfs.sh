@@ -99,22 +99,40 @@ zfs_start_volumes() {
                 zpool export -f "${ZFS_POOL}"
                 zpool import -N ${ZPOOL_FORCE} "${ZFS_POOL}"
             fi
-            # If ${ZFS_POOL}" supports encryption and is active
-            if [ "$(zpool list -H -o feature@encryption $(echo "${ZFS_POOL}" | awk -F\/ '{print $1}'))" = "active" ]; then
+	    if [ "$(zpool list -H -o feature@encryption $(echo "${ZFS_POOL}" | awk -F\/ '{print $1}'))" = "active" ]; then
                good_msg "Native ZFS encryption detected. Checking for encryptionroot."
                ENCRYPTIONROOT=$(/sbin/zfs get -H -o value encryptionroot "${ZFS_POOL}")
                # If root dataset is encrypted...
                if ! [ "${ENCRYPTIONROOT}" = "-" ]; then
                   good_msg "ZFS encryption root enabled"
+		  # Attempt to use TPM to auto-unlock
+		  tpmindex=$(/sbin/zfs get -H -o value org.zfsonlinux.tpm2:index "${ENCRYPTIONROOT}")
+		  tpmpcrs=$(/sbin/zfs get -H -o value org.zfsonlinux.tpm2:pcrs "${ENCRYPTIONROOT}")
+		  if ! [ "${tpmindex}" = "-" ] ; then
+			rootguid=$(/sbin/zfs get -H -o value guid "${ENCRYPTIONROOT}")
+			tpm2_startauthsession --policy -S s.dat
+			tpm2_policypassword -Q -S s.dat
+			tpm2_policypcr -Q -S s.dat -l "${tpmpcrs}"
+			tpm2_nvread "${tpmindex}" -P session:s.dat+"${rootguid}" | tr -d '\0'  \
+				| eval  /sbin/zfs load-key "${ENCRYPTIONROOT}"
+			if [ $? = 0 ]; then
+				#Lock the index from further reading until reboot
+				tpm2_startauthsession --policy -S s.dat
+				tpm2_policypassword -Q -S s.dat
+				tpm2_policypcr -Q -S s.dat -l "$tpmpcrs"
+				tpm2_nvreadlock  "${tpmindex}" -P session:s.dat+"${rootguid}" >> /dev/null
+				return 0
+			fi
+		  fi
                   ask_for_password --prompt "Encryption password for ('${ENCRYPTIONROOT}')" \
                                    --tries 5 \
                                    --cmd "/sbin/zfs load-key ${ENCRYPTIONROOT}"
                else
                   good_msg "ZFS root is not encrypted."
                fi
-            fi
-
-        else
+        
+	    fi
+	else
             good_msg "Importing ZFS pool ${ZFS_POOL}"
             zpool import -N ${ZPOOL_FORCE} "${ZFS_POOL}"
 
